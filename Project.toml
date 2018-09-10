@@ -1,0 +1,7 @@
+name = "KeywordDispatch"
+uuid = "65b96848-ad52-11e8-05e7-85f2d1863cc0"
+authors = ["Simon Byrne <simonbyrne@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

@@ -1,0 +1,182 @@
+using Test
+using KeywordDispatch
+import KeywordDispatch: KeywordMethodError
+
+@testset "new function" begin
+    @kwdispatch f()
+
+    @kwmethod f(;) = 10
+    @kwmethod f(;a) = a
+    @kwmethod f(;a,b) = a+b
+    @kwmethod f(;a,b::String) = b
+
+    @test f() == 10
+    @test f(a=7) == 7
+    @test f(a=7,b=4) == 11
+    @test f(b=7,a=4) == 11
+    @test f(a=7,b="xx") == "xx"
+    @test f(b="xx",a=7) == "xx"
+
+    @test_throws KeywordMethodError f(b=1)
+    @test_throws KeywordMethodError f(c=1)
+end
+
+
+@testset "existing" begin
+    g()= 1
+    @kwdispatch g(_::Real)
+    @kwdispatch g(_::Real,_::String)
+
+    @kwmethod g(x::Real,y::String="y";) = 10
+    @kwmethod g(x::Real,y::String="y";a) = a
+    @kwmethod g(x::Real,y::String="y";a,b) = a+b
+    @kwmethod g(x::Real,y::String="y";a,b::String) = y*b
+
+    @test g() == 1
+    @test g(1) == 10
+    @test g(1,"yy") == 10
+    @test g(1,a=7) == 7
+    @test g(1,"yy",a=7) == 7
+    @test g(1,a=7,b=4) == 11
+    @test g(1,"yy",a=7,b=4) == 11
+    @test g(1,a=7,b="bb") == "ybb"
+    @test g(1,"yy",a=7,b="bb") == "yybb"
+
+    @test_throws KeywordMethodError g(1,b=2)
+    @test_throws KeywordMethodError g(1,"aa",b=2)
+end
+
+@testset "splatting" begin
+    @kwdispatch h(x...)
+
+    @kwmethod h(x::Real;) = 10
+    @kwmethod h(x::Real;a) = a
+    @kwmethod h(x::Real;a,b) = a+b
+    @kwmethod h(x::Real...;a,b::String) = b
+
+    @test h(1) == 10
+    @test h(1,a=7) == 7
+    @test h(1,a=7,b=4) == 11
+    @test h(1,a=7,b="xx") == "xx"
+    @test h(1,2,3,a=7,b="xx") == "xx"
+
+    @test_throws KeywordMethodError h("aa")
+    @test_throws KeywordMethodError h(1,2,3)
+    @test_throws KeywordMethodError h(1,2,3,a=1,b=1)
+end
+
+@testset "all methods" begin
+    @kwdispatch j
+
+    @kwmethod j(;) = 10
+    @kwmethod j(x;c) = x+c
+
+    @test j() == 10
+    @test j(3,c=4) == 7
+
+    @test_throws KeywordMethodError j(c=1)
+    @test_throws KeywordMethodError j(1)
+    @test_throws KeywordMethodError j(1,a=1)
+end
+
+struct Foo
+end
+
+@testset "type" begin
+    @kwdispatch Foo(_::String)
+
+    @kwmethod Foo(_::String;) = 10
+    @kwmethod Foo(_::String;a) = a
+    @kwmethod Foo(_::String;a,b) = a+b
+    @kwmethod Foo(_::String;a,b::String) = b
+
+    @test Foo("aa") == 10
+    @test Foo("aa",a=7) == 7
+    @test Foo("aa",a=7,b=4) == 11
+    @test Foo("aa",a=7,b="xx") == "xx"
+
+    @test_throws KeywordMethodError Foo("aa",b=1)
+end
+
+@testset "call overloading" begin
+    @kwdispatch (::Foo)
+
+    @kwmethod (::Foo)(;) = 13
+    @kwmethod (::Foo)(;a) = a+4
+    @kwmethod (::Foo)(;a,b) = a+b+7
+    @kwmethod (::Foo)(;a,b::String) = a
+
+    @test Foo()() == 13
+    @test Foo()(a=7) == 7+4
+    @test Foo()(a=7,b=4) == 11+7
+    @test Foo()(a=7,b="xx") == 7
+
+    @test_throws KeywordMethodError Foo()(1)
+    @test_throws KeywordMethodError Foo()(b=1)
+end
+
+struct Bar{T}
+    w::T
+end
+@testset "call overloading with ref" begin
+    @kwdispatch (::Bar{Float64})
+
+    @kwmethod (t::Bar{Float64})(;) = t.w+13
+    @kwmethod (t::Bar{Float64})(;a) = t.w+a+4
+    @kwmethod (t::Bar{Float64})(;a,b) = t.w+a+b+7
+
+    @test Bar(5.0)() == 5.0+13
+    @test Bar(5.0)(a=7) == 5.0+7+4
+    @test Bar(5.0)(a=7,b=4) == 5.0+7+4+7
+
+    @test_throws KeywordMethodError Bar(5.0)(1)
+    @test_throws KeywordMethodError Bar(5.0)(b=1)
+end
+
+@testset "curly" begin
+    @kwdispatch Bar{String}()
+
+    @kwmethod Bar{String}(;) = Bar("")
+    @kwmethod Bar{String}(;a) = Bar("a$a")
+    @kwmethod Bar{String}(;a,b) = Bar("a$a b$b")
+
+    @test Bar{String}() == Bar("")
+    @test Bar{String}(a=7) == Bar("a7")
+    @test Bar{String}(a=7,b=4) == Bar("a7 b4")
+
+    @test_throws KeywordMethodError Bar{String}(b=1)
+end
+
+
+@testset "where clauses" begin
+    @kwdispatch Bar{T}() where {T<:Integer}
+
+    @kwmethod Bar{T}(;) where {T<:Integer} = Bar(T(13))
+    @kwmethod Bar{T}(;a) where {T<:Integer} = Bar(T(a+4))
+    @kwmethod Bar{T}(;a,b) where {T<:Integer} = Bar(T(a+b+7))
+
+    @test Bar{Int}() == Bar(Int(13))
+    @test Bar{UInt}(a=7) == Bar(UInt(7+4))
+    @test Bar{Int16}(a=7,b=4) == Bar(Int16(7+4+7))
+
+    @test_throws KeywordMethodError Bar{Int}(b=1)
+end
+
+
+@testset "different module" begin
+    @kwdispatch Base.RoundingMode
+
+    @kwmethod Base.RoundingMode(;) = 10
+    @kwmethod Base.RoundingMode(;a) = a
+    @kwmethod Base.RoundingMode(;a,b) = a+b
+    @kwmethod Base.RoundingMode(;a,b::String) = b
+
+    @test Base.RoundingMode() == 10
+    @test Base.RoundingMode(a=7) == 7
+    @test Base.RoundingMode(a=7,b=4) == 11
+    @test Base.RoundingMode(a=7,b="xx") == "xx"
+
+    @test_throws KeywordMethodError Base.RoundingMode(b=1)
+    @test_throws MethodError Base.RoundDown()
+end
+
