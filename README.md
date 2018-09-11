@@ -1,5 +1,7 @@
 # KeywordDispatch.jl
 
+[![Build Status](https://travis-ci.org/simonbyrne/KeywordDispatch.jl.svg?branch=master)](https://travis-ci.org/simonbyrne/KeywordDispatch.jl)
+
 Dispatch on keyword arguments. It exports 2 macros:
  - `@kwdispatch` designates a function signature to use for keyword dispatch
  - `@kwmethod` defines the method for the keyword argument
