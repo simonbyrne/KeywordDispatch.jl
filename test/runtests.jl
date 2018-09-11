@@ -83,6 +83,8 @@ struct Foo
 end
 
 @testset "type" begin
+    global Foo
+    
     @kwdispatch Foo(_::String)
 
     @kwmethod Foo(_::String;) = 10
@@ -99,6 +101,8 @@ end
 end
 
 @testset "call overloading" begin
+    global Foo
+
     @kwdispatch (::Foo)
 
     @kwmethod (::Foo)(;) = 13
@@ -119,6 +123,8 @@ struct Bar{T}
     w::T
 end
 @testset "call overloading with ref" begin
+    global Bar
+    
     @kwdispatch (::Bar{Float64})
 
     @kwmethod (t::Bar{Float64})(;) = t.w+13
@@ -134,6 +140,8 @@ end
 end
 
 @testset "curly" begin
+    global Bar
+
     @kwdispatch Bar{String}()
 
     @kwmethod Bar{String}(;) = Bar("")
@@ -149,6 +157,8 @@ end
 
 
 @testset "where clauses" begin
+    global Bar
+
     @kwdispatch Bar{T}() where {T<:Integer}
 
     @kwmethod Bar{T}(;) where {T<:Integer} = Bar(T(13))
@@ -163,7 +173,7 @@ end
 end
 
 
-@testset "different module" begin
+@testset "different module" begin    
     @kwdispatch Base.RoundingMode
 
     @kwmethod Base.RoundingMode(;) = 10
