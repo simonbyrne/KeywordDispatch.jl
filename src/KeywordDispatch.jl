@@ -58,6 +58,30 @@ struct KeywordMethodError <: Exception
     KeywordMethodError(@nospecialize(f), @nospecialize(args), @nospecialize(kwargs)) = new(f, args, kwargs)
 end
 
+function Base.showerror(io::IO, err::KeywordMethodError)
+    print(io, "KeywordMethodError: no keyword matching ")
+    if err.f isa Function || err.f isa Type
+        print(io, err.f)
+    else
+        print(io, "(::", typeof(err.f), ")")
+    end
+    print(io, "(")
+    for (i, arg) in enumerate(err.args)
+        print(io, "::", typeof(arg))
+        if i != length(err.args)
+            print(io, ", ")
+        end
+    end
+    print(io, "; ")
+    for (i, (kw,kwarg)) in enumerate(pairs(err.kwargs))
+        print(io, kw, "::", typeof(kwarg))
+        if i != length(err.kwargs)
+            print(io, ", ")
+        end
+    end
+    print(io, ")")
+end
+
 function kwcall(nt::NamedTuple, f, args...)
     throw(KeywordMethodError(f, args, nt))
 end
@@ -85,7 +109,7 @@ methods, use the [`@kwmethod`](@ref) macro.
 """
 macro kwdispatch(fexpr)
     fexpr = outexpr = :($fexpr = _)
-    
+
     # unwrap where clauses
     while fexpr.args[1] isa Expr && fexpr.args[1].head == :where
         fexpr = fexpr.args[1]
@@ -97,9 +121,9 @@ macro kwdispatch(fexpr)
     if fcall isa Symbol || fcall isa Expr && (fcall.head in (:., :(::), :curly))
         fcall = :($fcall(_...))
     end
-    
+
     @assert fcall isa Expr && fcall.head == :call
-        
+
     f = fcall.args[1]
     fargs = fcall.args[2:end]
     if length(fargs) >= 1 && fargs[1] isa Expr && fargs[1].head == :parameters
@@ -112,10 +136,10 @@ macro kwdispatch(fexpr)
     else
         ftype = :(typeof($(esc(f))))
     end
-    
+
     fargs_method = argmeth.(fargs)
     fexpr.args[1] = :($(esc(f))($(esc.(fargs_method)...); kwargs...))
-    
+
     outexpr.args[2] = :(kwcall(ntsort(kwargs.data), $(esc(argsym(f))), $(esc.(argsym.(fargs_method))...)))
     return outexpr
 end
@@ -142,7 +166,7 @@ The positional signature should first be designated by the [`@kwdispatch`](@ref)
 macro kwmethod(fexpr)
     @assert fexpr isa Expr && fexpr.head in (:function, :(=))
     fexpr.args[2] = esc(fexpr.args[2])
-    
+
     outexpr = fexpr
     # unwrap where clauses
     while fexpr.args[1] isa Expr && fexpr.args[1].head == :where
@@ -152,12 +176,12 @@ macro kwmethod(fexpr)
 
     fcall = fexpr.args[1]
     @assert fcall isa Expr && fcall.head == :call
-    
+
     f = fcall.args[1]
 
     length(fcall.args) >= 2 && fcall.args[2] isa Expr && fcall.args[2].head == :parameters ||
         error("@kwdef requires functions specify a keyword block.\nUse @kwdef `f(args...;)` to specify no keywords.")
-    
+
     kwargs = fcall.args[2].args
     fargs = fcall.args[3:end]
 
