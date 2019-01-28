@@ -59,7 +59,7 @@ struct KeywordMethodError <: Exception
 end
 
 function Base.showerror(io::IO, err::KeywordMethodError)
-    print(io, "KeywordMethodError: no keyword matching ")
+    print(io, "KeywordMethodError: no keyword method matching ")
     if err.f isa Function || err.f isa Type
         print(io, err.f)
     else
