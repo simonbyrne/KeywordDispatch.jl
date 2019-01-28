@@ -103,7 +103,7 @@ macro kwdispatch(fexpr)
     f = fcall.args[1]
     fargs = fcall.args[2:end]
     if length(fargs) >= 1 && fargs[1] isa Expr && fargs[1].head == :parameters
-        error("keyword arguments should only appear in @kwdef expressions")
+        error("keyword arguments should only appear in @kwdispatch expressions")
     end
     f = argmeth(f)
 
