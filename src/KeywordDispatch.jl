@@ -180,7 +180,7 @@ macro kwmethod(fexpr)
     f = fcall.args[1]
 
     length(fcall.args) >= 2 && fcall.args[2] isa Expr && fcall.args[2].head == :parameters ||
-        error("@kwdef requires functions specify a keyword block.\nUse @kwdef `f(args...;)` to specify no keywords.")
+        error("@kwmethod requires functions specify a keyword block.\nUse @kwmethod `f(args...;)` to specify no keywords.")
 
     kwargs = fcall.args[2].args
     fargs = fcall.args[3:end]
