@@ -190,3 +190,22 @@ end
     @test_throws MethodError Base.RoundDown()
 end
 
+@testset "kwdispatch extra argument" begin
+    @kwdispatch h(x) begin
+        (a) -> x+a
+        (b) -> x-b
+    end
+
+    @test h(1, a=2) == 3
+    @test h(1, b=2) == -1
+
+    @test_throws KeywordMethodError h(1)
+    @test_throws KeywordMethodError h(1, c=2)
+
+    @test_throws MethodError h()
+    @test_throws MethodError h(;a=1)
+
+    @kwmethod h(x; c) = c
+
+    @test h(1, c=2) == 2
+end

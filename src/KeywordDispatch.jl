@@ -51,6 +51,22 @@ argtype(x::Symbol) = Any
 argtype(x::Expr) = x.head == :(::) ? x.args[end] : error("unexpected expression $x")
 
 
+function unwrap_where(expr)
+    stack = Any[]
+    while expr isa Expr && expr.head == :where
+        push!(stack, expr.args[2])
+        expr = expr.args[1]
+    end
+    expr, stack
+end
+
+function wrap_where(expr, stack)
+    for w in Iterators.reverse(stack)
+        expr = Expr(:where, expr, esc(w))
+    end
+    expr
+end
+
 struct KeywordMethodError <: Exception
     f
     args
@@ -88,14 +104,16 @@ end
 
 
 """
-    @kwdispatch expr
+    @kwdispatch sig [methods]
 
-Designate a function signature `expr` that should dispatch on keyword arguments. A
+Designate a function signature `sig` that should dispatch on keyword arguments. A
 function can also be provided, in which case _all_ calls to that function are will
 dispatch to keyword methods.
 
-Note that no keywords should appear in `@kwdispatch` signatures. To define the keyword
-methods, use the [`@kwmethod`](@ref) macro.
+Note that no keywords should appear in `sig` signatures.
+
+The optional `methods` argument allows a block of keyword methods specified as anonymous
+functions. To define additional keyword methods, use the [`@kwmethod`](@ref) macro.
 
 # Examples
 
@@ -105,17 +123,18 @@ methods, use the [`@kwmethod`](@ref) macro.
 
 @kwdispacth f # equivalent to @kwdispatch f(_...)
 
+@kwdispatch f(x) begin
+    (a) -> x+a
+    (b) -> x-b
+end
+# equivalent to
+#  @kwdispatch f(x)
+#  @kwmethod f(x;a) = x+a
+#  @kwmethod f(x;b) = x-b
 ```
 """
-macro kwdispatch(fexpr)
-    fexpr = outexpr = :($fexpr = _)
-
-    # unwrap where clauses
-    while fexpr.args[1] isa Expr && fexpr.args[1].head == :where
-        fexpr = fexpr.args[1]
-        fexpr.args[2] = esc(fexpr.args[2])
-    end
-    fcall = fexpr.args[1]
+macro kwdispatch(fexpr,methods=nothing)
+    fcall, wherestack = unwrap_where(fexpr)
 
     # handle: `fun`, `Mod.fun`, `(a::B)`
     if fcall isa Symbol || fcall isa Expr && (fcall.head in (:., :(::), :curly))
@@ -125,8 +144,8 @@ macro kwdispatch(fexpr)
     @assert fcall isa Expr && fcall.head == :call
 
     f = fcall.args[1]
-    fargs = fcall.args[2:end]
-    if length(fargs) >= 1 && fargs[1] isa Expr && fargs[1].head == :parameters
+    posargs = fcall.args[2:end]
+    if length(posargs) >= 1 && posargs[1] isa Expr && posargs[1].head == :parameters
         error("keyword arguments should only appear in @kwdispatch expressions")
     end
     f = argmeth(f)
@@ -137,12 +156,34 @@ macro kwdispatch(fexpr)
         ftype = :(typeof($(esc(f))))
     end
 
-    fargs_method = argmeth.(fargs)
-    fexpr.args[1] = :($(esc(f))($(esc.(fargs_method)...); kwargs...))
+    posargs_method = argmeth.(posargs)
+    ff = esc(argsym(f))
 
-    outexpr.args[2] = :(kwcall(ntsort(kwargs.data), $(esc(argsym(f))), $(esc.(argsym.(fargs_method))...)))
-    return outexpr
+    quote
+        $(wrap_where(:($(esc(f))($(esc.(posargs_method)...); kwargs...)), wherestack)) =
+            KeywordDispatch.kwcall(ntsort(kwargs.data), $ff, $(esc.(argsym.(posargs_method))...))
+        $(generate_kwmethods(methods, f, posargs, wherestack))
+    end
 end
+
+generate_kwmethods(other, f, posargs, wherestack) = other
+function generate_kwmethods(expr::Expr, f, posargs, wherestack)
+    if expr.head == :block
+        for (i, ex) in enumerate(expr.args)
+            expr.args[i] = generate_kwmethods(ex, f, posargs, wherestack)
+        end
+        return expr
+    elseif expr.head in (:->, :function)
+        if expr.args[1] isa Symbol
+            return kwmethod_expr(f, posargs, [expr.args[1]], wherestack, esc(expr.args[2]))
+        elseif expr.args[1] isa Expr && expr.args[1].head == :tuple
+            return kwmethod_expr(f, posargs, expr.args[1].args, wherestack, esc(expr.args[2]))
+        end
+    end
+    error("Invalid keyword definition $expr.")
+end
+
+
 
 """
     @kwmethod expr
@@ -165,16 +206,10 @@ The positional signature should first be designated by the [`@kwdispatch`](@ref)
 """
 macro kwmethod(fexpr)
     @assert fexpr isa Expr && fexpr.head in (:function, :(=))
-    fexpr.args[2] = esc(fexpr.args[2])
+    body = esc(fexpr.args[2])
 
-    outexpr = fexpr
-    # unwrap where clauses
-    while fexpr.args[1] isa Expr && fexpr.args[1].head == :where
-        fexpr = fexpr.args[1]
-        fexpr.args[2] = esc(fexpr.args[2])
-    end
+    fcall, wherestack = unwrap_where(fexpr.args[1])
 
-    fcall = fexpr.args[1]
     @assert fcall isa Expr && fcall.head == :call
 
     f = fcall.args[1]
@@ -183,8 +218,12 @@ macro kwmethod(fexpr)
         error("@kwmethod requires functions specify a keyword block.\nUse @kwmethod `f(args...;)` to specify no keywords.")
 
     kwargs = fcall.args[2].args
-    fargs = fcall.args[3:end]
+    posargs = fcall.args[3:end]
+    kwmethod_expr(f, posargs, kwargs, wherestack, body)
+end
 
+
+function kwmethod_expr(f, posargs, kwargs, wherestack, body)
     sort!(kwargs, by=argsym)
 
     kwsyms = argsym.(kwargs)
@@ -196,11 +235,12 @@ macro kwmethod(fexpr)
         F = :(::($(esc(f)) isa Type ? Type{$(esc(f))} : typeof($(esc(f)))))
     end
 
-    fexpr.args[1] = :(KeywordDispatch.kwcall(($(esc.(kwsyms)...),)::NamedTuple{($(QuoteNode.(kwsyms)...),),T},
-                                             $F,
-                                             $(esc.(fargs)...)) where {T<:Tuple{$(esc.(kwtypes)...)}})
-    return outexpr
+    quote
+        $(wrap_where(:(KeywordDispatch.kwcall(($(esc.(kwsyms)...),)::NamedTuple{($(QuoteNode.(kwsyms)...),),T},
+                                              $F,
+                                              $(esc.(posargs)...)) where {T<:Tuple{$(esc.(kwtypes)...)}}), wherestack)) =
+                                                  $body
+    end
 end
-
 
 end # module
