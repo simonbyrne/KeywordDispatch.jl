@@ -209,3 +209,28 @@ end
 
     @test h(1, c=2) == 2
 end
+
+struct Baz{T}
+    w::T
+end
+
+@testset "kwdispatch extra arg" begin
+    global Baz
+    
+    @kwdispatch (::Type{B})() where {B<:Baz} begin
+        () -> B(0)
+        (w) -> B(w)
+        (z) -> B(sqrt(z))
+    end
+
+    @test Baz() == Baz{Int}(0)
+    @test Baz{Float64}() == Baz{Float64}(0.0)
+
+    @test Baz(w=3) == Baz{Int}(3)
+    @test Baz(w=3.0) == Baz{Float64}(3.0)
+    @test Baz{Float64}(w=3) == Baz{Float64}(3.0)
+
+    @test Baz(z=4) == Baz{Float64}(2.0)
+    @test Baz{Int}(z=4) == Baz{Int}(2)
+    @test Baz{Float64}(z=4) == Baz{Float64}(2.0)
+end    
