@@ -214,7 +214,7 @@ struct Baz{T}
     w::T
 end
 
-@testset "kwdispatch extra arg" begin
+@testset "kwdispatch subtype extra arg" begin
     global Baz
     
     @kwdispatch (::Type{B})() where {B<:Baz} begin
@@ -234,3 +234,20 @@ end
     @test Baz{Int}(z=4) == Baz{Int}(2)
     @test Baz{Float64}(z=4) == Baz{Float64}(2.0)
 end    
+
+
+@testset "kw rename" begin
+    @kwdispatch f(;alpha => α, beta => β)
+
+    @kwmethod f(;α) = 1
+    @kwmethod f(;β) = 2
+    @kwmethod f(;α,β) = 3
+
+    @test f(α=0) == 1
+    @test f(alpha=0) == 1
+
+    @test f(β=0) == 2
+    @test f(beta=0) == 2
+
+    @test f(alpha=0,beta=0) == 3
+end

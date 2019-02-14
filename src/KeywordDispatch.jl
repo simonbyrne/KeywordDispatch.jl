@@ -110,7 +110,7 @@ Designate a function signature `sig` that should dispatch on keyword arguments. 
 function can also be provided, in which case _all_ calls to that function are will
 dispatch to keyword methods.
 
-Note that no keywords should appear in `sig` signatures.
+It is possible to specify keyword aliases by specifying `from => to` pairs in the keyword position.
 
 The optional `methods` argument allows a block of keyword methods specified as anonymous
 functions. To define additional keyword methods, use the [`@kwmethod`](@ref) macro.
@@ -131,6 +131,8 @@ end
 #  @kwdispatch f(x)
 #  @kwmethod f(x;a) = x+a
 #  @kwmethod f(x;b) = x-b
+
+@kwdispatch f(; alpha=>α) # specifies alpha as an alias to α
 ```
 """
 macro kwdispatch(fexpr,methods=nothing)
@@ -143,10 +145,19 @@ macro kwdispatch(fexpr,methods=nothing)
 
     @assert fcall isa Expr && fcall.head == :call
 
+    rename_expr = :(kw)
+
     f = fcall.args[1]
     posargs = fcall.args[2:end]
     if length(posargs) >= 1 && posargs[1] isa Expr && posargs[1].head == :parameters
-        error("keyword arguments should only appear in @kwdispatch expressions")
+        parameters = popfirst!(posargs)
+        for p in parameters.args
+            if p isa Expr && p.head == :call && p.args[1] == :(=>)
+                rename_expr = :(kw == $(QuoteNode(p.args[2])) ? $(QuoteNode(p.args[3])) : $rename_expr)
+            else
+                error("Only renames (from => to) are allowed in keyword position of `@kwdispatch`")
+            end
+        end
     end
     f = argmeth(f)
 
@@ -160,8 +171,11 @@ macro kwdispatch(fexpr,methods=nothing)
     ff = esc(argsym(f))
 
     quote
-        $(wrap_where(:($(esc(f))($(esc.(posargs_method)...); kwargs...)), wherestack)) =
-            KeywordDispatch.kwcall(ntsort(kwargs.data), $ff, $(esc.(argsym.(posargs_method))...))
+        $(wrap_where(:($(esc(f))($(esc.(posargs_method)...); kwargs...)), wherestack)) = begin
+            N = map(kw -> $rename_expr, propertynames(kwargs.data))
+            nt = NamedTuple{N}(Tuple(kwargs.data))
+            KeywordDispatch.kwcall(ntsort(nt), $ff, $(esc.(argsym.(posargs_method))...))
+        end
         $(generate_kwmethods(methods, f, posargs, wherestack))
     end
 end
