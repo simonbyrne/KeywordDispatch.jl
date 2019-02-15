@@ -1,7 +1,7 @@
 name = "KeywordDispatch"
 uuid = "5888135b-5456-5c80-a1b6-c91ef8180460"
 authors = ["Simon Byrne <simonbyrne@gmail.com>"]
-version = "0.2.0"
+version = "0.3.0"
 
 [deps]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
