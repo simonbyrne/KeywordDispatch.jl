@@ -283,7 +283,7 @@ end
 
 
 function kwmethod_expr(f, posargs, kwargs, wherestack, body)
-    # sort!(kwargs, by=argsym)
+    sort!(kwargs, by=argsym)
 
     kwsyms = argsym.(kwargs)
     kwtypes = argtype.(kwargs)
