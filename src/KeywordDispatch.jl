@@ -40,6 +40,13 @@ argsym(x::Symbol) = x
 function argsym(x::Expr)
     x.head == :(::) && return length(x.args) > 1 ? x.args[1] : :_
     x.head == :...  && return Expr(:..., argsym.(x.args)...)
+    if x.head == :kw
+        if x.args[1] isa Expr && x.args[1].head == :(::) # Type also provided
+            return x.args[1].args[1]
+        else
+            return x.args[1]
+        end
+    end
     return x
 end
 
