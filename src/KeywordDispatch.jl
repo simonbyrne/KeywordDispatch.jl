@@ -59,7 +59,7 @@ function argtype(x::Expr)
         type = x.args[end]
 
     elseif x.head == :kw # default value provided
-        if x.args[1].head == :(::) # Type also provided
+        if x.args[1] isa Expr && x.args[1].head == :(::) # Type also provided
             type = x.args[1].args[end]
         else
             type = Any
@@ -276,7 +276,7 @@ end
 
 
 function kwmethod_expr(f, posargs, kwargs, wherestack, body)
-    sort!(kwargs, by=argsym)
+    # sort!(kwargs, by=argsym)
 
     kwsyms = argsym.(kwargs)
     kwtypes = argtype.(kwargs)
