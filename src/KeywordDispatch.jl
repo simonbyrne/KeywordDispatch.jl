@@ -16,14 +16,19 @@ function ntsort(nt::NamedTuple{N}) where {N}
     end
 end
 
-# given an argument, output a form appropriate for a method definition in pass-through methods
-# currently:
-#  - replaces underscores with new symbols
-#    g(_) => g(newsym)
-#  - replaces tuples with a single symbol
-#    g((a,b)) => g(newsym)
-#  - inserts symbols for 1-arg ::,
-#    g(::T)   => g(newsym::T)
+
+"""
+    argmeth(x)
+
+given an argument, output a form appropriate for a method definition in pass-through methods
+currently:
+ - replaces underscores with new symbols
+   g(_) => g(newsym)
+ - replaces tuples with a single symbol
+   g((a,b)) => g(newsym)
+ - inserts symbols for 1-arg ::,
+   g(::T)   => g(newsym::T)
+"""
 argmeth(x::Symbol) = x == :_ ? gensym() : x
 function argmeth(x::Expr)
     x.head == :tuple && return gensym()
@@ -32,10 +37,15 @@ function argmeth(x::Expr)
     return x
 end
 
-# given an argument, output a form appropriate for a method call in pass-through methods
-# currently:
-#  - removes the :: part
-#    g(x::T)   => g(x)
+
+"""
+    argsym(x)
+    
+given an argument, output a form appropriate for a method call in pass-through methods
+currently:
+ - removes the :: part
+   g(x::T)   => g(x)
+"""
 argsym(x::Symbol) = x
 function argsym(x::Expr)
     x.head == :(::) && return length(x.args) > 1 ? x.args[1] : :_
