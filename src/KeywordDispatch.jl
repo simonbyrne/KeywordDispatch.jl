@@ -56,18 +56,37 @@ given an argument, output an argument type
 argtype(x::Symbol) = Any
 function argtype(x::Expr)
     if x.head == :(::) # Only Type provided
-        out = x.args[end]
+        type = x.args[end]
 
     elseif x.head == :kw # default value provided
         if x.args[1].head == :(::) # Type also provided
-            out = x.args[1].args[end]
+            type = x.args[1].args[end]
         else
-            out = Any
+            type = Any
         end
     else
         error("unexpected expression $x")
     end
-     return out
+    return type
+end
+
+"""
+    arg_defval(x)
+
+Returns default value of a keyword if provided
+"""
+arg_defval(x::Symbol) = missing
+function arg_defval(x::Expr)
+    if x.head == :(::) # Only Type provided
+        deval = missing
+
+    elseif x.head == :kw # default value provided
+        defval = x.args[end]
+        
+    else
+        error("unexpected expression $x")
+    end
+    return defval
 end
 
 function unwrap_where(expr)
