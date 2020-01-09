@@ -43,13 +43,32 @@ function argsym(x::Expr)
     return x
 end
 
-# given an argument, output an argument type
-# currently:
-#  - g(x::T)  => T
-#  - g(x)     => Any
-argtype(x::Symbol) = Any
-argtype(x::Expr) = x.head == :(::) ? x.args[end] : error("unexpected expression $x")
 
+"""
+    argtype(x)
+
+given an argument, output an argument type
+- g(x::T)  => T
+- g(x::T = 2) => T
+- g(x) => Any
+- g(x=2) => Any
+"""
+argtype(x::Symbol) = Any
+function argtype(x::Expr)
+    if x.head == :(::) # Only Type provided
+        out = x.args[end]
+
+    elseif x.head == :kw # default value provided
+        if x.args[1].head == :(::) # Type also provided
+            out = x.args[1].args[end]
+        else
+            out = Any
+        end
+    else
+        error("unexpected expression $x")
+    end
+     return out
+end
 
 function unwrap_where(expr)
     stack = Any[]
