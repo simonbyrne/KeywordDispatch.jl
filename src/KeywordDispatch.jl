@@ -305,9 +305,10 @@ function kwmethod_expr(f, posargs, kwargs, wherestack, body)
     end
 
     quote
-        $(wrap_where(:(KeywordDispatch.kwcall( ($(esc.(kwsysm_nodefval)...),)::NamedTuple{($(QuoteNode.(kwsysm_nodefval)...),),T1}, ($(esc.(kwsysm_defval)...),)::NamedTuple{($(QuoteNode.(kwsysm_defval)...),),T2} = $(esc.(kwdefval_defval)...),
+        $(wrap_where(:(KeywordDispatch.kwcall( ($(esc.(kwsysm_nodefval)...),)::NamedTuple{($(QuoteNode.(kwsysm_nodefval)...),),T1},
         $F,
-        $(esc.(posargs)...)) where {T1<:Tuple{$(esc.(kwtypes_nodefval)...)}, T2<:Tuple{$(esc.(kwtypes_defval)...)}}), wherestack)) = $body
+        $(esc.(posargs)...),
+        ($(esc.(kwsysm_defval)...),)::NamedTuple{($(QuoteNode.(kwsysm_defval)...),),T2} = $(esc.(kwdefval_defval)...)) where {T1<:Tuple{$(esc.(kwtypes_nodefval)...)}, T2<:Tuple{$(esc.(kwtypes_defval)...)}}), wherestack)) = $body
     end
 end
 
