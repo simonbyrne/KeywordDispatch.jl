@@ -78,11 +78,11 @@ Returns default value of a keyword if provided
 arg_defval(x::Symbol) = missing
 function arg_defval(x::Expr)
     if x.head == :(::) # Only Type provided
-        deval = missing
+        defval = missing
 
     elseif x.head == :kw # default value provided
         defval = x.args[end]
-        
+
     else
         error("unexpected expression $x")
     end
@@ -280,6 +280,16 @@ function kwmethod_expr(f, posargs, kwargs, wherestack, body)
 
     kwsyms = argsym.(kwargs)
     kwtypes = argtype.(kwargs)
+    kwdefval= arg_defval.(kwargs)
+
+    idx_nodefval = ismissing.(kwdefval)
+    kwsysm_nodefval = kwsyms[idx_nodefval]
+    kwtypes_nodefval = kwtypes[idx_nodefval]
+
+    idx_defval = .!idx_nodefval
+    kwsysm_defval = kwsyms[idx_defval]
+    kwtypes_defval = kwtypes[idx_defval]
+    kwdefval_defval = kwdefval[idx_defval]
 
     if f isa Expr && f.head == :(::)
         F = esc(f)
@@ -288,10 +298,9 @@ function kwmethod_expr(f, posargs, kwargs, wherestack, body)
     end
 
     quote
-        $(wrap_where(:(KeywordDispatch.kwcall(($(esc.(kwsyms)...),)::NamedTuple{($(QuoteNode.(kwsyms)...),),T},
-                                              $F,
-                                              $(esc.(posargs)...)) where {T<:Tuple{$(esc.(kwtypes)...)}}), wherestack)) =
-                                                  $body
+        $(wrap_where(:(KeywordDispatch.kwcall( ($(esc.(kwsysm_nodefval)...),)::NamedTuple{($(QuoteNode.(kwsysm_nodefval)...),),T1}, ($(esc.(kwsysm_defval)...),)::NamedTuple{($(QuoteNode.(kwsysm_defval)...),),T2} = $(esc.(kwdefval_defval)...),
+        $F,
+        $(esc.(posargs)...)) where {T1<:Tuple{$(esc.(kwtypes_nodefval)...)}, T2<:Tuple{$(esc.(kwtypes_defval)...)}}), wherestack)) = $body
     end
 end
 
