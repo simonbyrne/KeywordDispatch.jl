@@ -40,7 +40,7 @@ end
 
 """
     argsym(x)
-    
+
 given an argument, output a form appropriate for a method call in pass-through methods
 currently:
  - removes the :: part
@@ -126,7 +126,8 @@ struct KeywordMethodError <: Exception
     f
     args
     kwargs
-    KeywordMethodError(@nospecialize(f), @nospecialize(args), @nospecialize(kwargs)) = new(f, args, kwargs)
+    kwargs_defval
+    KeywordMethodError(@nospecialize(f), @nospecialize(args), @nospecialize(kwargs), @nospecialize(kwargs_defval)) = new(f, args, kwargs, kwargs_defval)
 end
 
 function Base.showerror(io::IO, err::KeywordMethodError)
@@ -153,8 +154,8 @@ function Base.showerror(io::IO, err::KeywordMethodError)
     print(io, ")")
 end
 
-function kwcall(nt::NamedTuple, f, args...)
-    throw(KeywordMethodError(f, args, nt))
+function kwcall(nt::NamedTuple, nt_defval, f, args...)
+    throw(KeywordMethodError(f, args, nt, nt_defval))
 end
 
 
@@ -314,11 +315,13 @@ function kwmethod_expr(f, posargs, kwargs, wherestack, body)
         F = :(::($(esc(f)) isa Type ? Type{$(esc(f))} : typeof($(esc(f)))))
     end
 
+
     quote
         $(wrap_where(:(KeywordDispatch.kwcall( ($(esc.(kwsysm_nodefval)...),)::NamedTuple{($(QuoteNode.(kwsysm_nodefval)...),),T1},
+        ($(esc.(kwsysm_defval)...),)::NamedTuple{($(QuoteNode.(kwsysm_defval)...),),T2} = $(esc.(kwdefval_defval)...),
         $F,
-        $(esc.(posargs)...),
-        ($(esc.(kwsysm_defval)...),)::NamedTuple{($(QuoteNode.(kwsysm_defval)...),),T2} = $(esc.(kwdefval_defval)...)) where {T1<:Tuple{$(esc.(kwtypes_nodefval)...)}, T2<:Tuple{$(esc.(kwtypes_defval)...)}}), wherestack)) = $body
+        $(esc.(posargs)...)) where {T1<:Tuple{$(esc.(kwtypes_nodefval)...)}},
+        {T2<:Tuple{$(esc.(kwtypes_defval)...)}}), wherestack)) = $body
     end
 end
 
