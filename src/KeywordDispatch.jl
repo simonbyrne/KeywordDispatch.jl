@@ -54,7 +54,7 @@ argtype(x::Expr) = x.head == :(::) ? x.args[end] : error("unexpected expression 
 function unwrap_where(expr)
     stack = Any[]
     while expr isa Expr && expr.head == :where
-        push!(stack, expr.args[2])
+        append!(stack, expr.args[2:end])
         expr = expr.args[1]
     end
     expr, stack
