@@ -251,3 +251,15 @@ end
 
     @test f(alpha=0,beta=0) == 3
 end
+
+@testset "multiple where clauses" begin
+    # based on https://github.com/simonbyrne/KeywordDispatch.jl/issues/9
+    @kwdispatch f(x::T) where {T}
+
+    @kwmethod f(x::T; y::TI) where {T, TI <: Vector{T}} = y
+
+    @test f(1.0,y=[1.0,2.0]) == [1.0,2.0]
+    @test f(1,y=[1,2]) == [1,2]
+
+    @test_throws KeywordMethodError f(1,y=[1.0,2.0])
+end
