@@ -1,6 +1,6 @@
 # KeywordDispatch.jl
 
-[![Build Status](https://travis-ci.org/simonbyrne/KeywordDispatch.jl.svg?branch=master)](https://travis-ci.org/simonbyrne/KeywordDispatch.jl)
+[![Build Status](https://github.com/simonbyrne/KeywordDispatch.jl/workflows/CI/badge.svg?branch=master)](https://github.com/simonbyrne/KeywordDispatch.jl/actions?query=workflow%3ACI)
 
 Dispatch on keyword arguments. It exports 2 macros:
  - `@kwdispatch` designates a function signature to use for keyword dispatch
