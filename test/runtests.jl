@@ -84,7 +84,7 @@ end
 
 @testset "type" begin
     global Foo
-    
+
     @kwdispatch Foo(_::String)
 
     @kwmethod Foo(_::String;) = 10
@@ -124,7 +124,7 @@ struct Bar{T}
 end
 @testset "call overloading with ref" begin
     global Bar
-    
+
     @kwdispatch (::Bar{Float64})
 
     @kwmethod (t::Bar{Float64})(;) = t.w+13
@@ -173,7 +173,7 @@ end
 end
 
 
-@testset "different module" begin    
+@testset "different module" begin
     @kwdispatch Base.RoundingMode
 
     @kwmethod Base.RoundingMode(;) = 10
@@ -216,7 +216,7 @@ end
 
 @testset "kwdispatch subtype extra arg" begin
     global Baz
-    
+
     @kwdispatch (::Type{B})() where {B<:Baz} begin
         () -> B(0)
         (w) -> B(w)
@@ -233,7 +233,7 @@ end
     @test Baz(z=4) == Baz{Float64}(2.0)
     @test Baz{Int}(z=4) == Baz{Int}(2)
     @test Baz{Float64}(z=4) == Baz{Float64}(2.0)
-end    
+end
 
 
 @testset "kw rename" begin
@@ -262,4 +262,32 @@ end
     @test f(1,y=[1,2]) == [1,2]
 
     @test_throws KeywordMethodError f(1,y=[1.0,2.0])
+end
+
+@testset "Base.showerror(::KeywordMethodError)" begin
+    errs = [
+        KeywordMethodError(sin, ("foo",), (; bar="baz")),
+        KeywordMethodError(String, ("foo",), (; bar="baz")),
+        KeywordMethodError("sin", ("foo",), (; bar="baz")),
+    ]
+    expected_outputs = [
+        "KeywordMethodError: no keyword method matching sin(::String; bar::String)",
+        "KeywordMethodError: no keyword method matching String(::String; bar::String)",
+        "KeywordMethodError: no keyword method matching (::String)(::String; bar::String)",
+    ]
+    for i in 1:length(errs)
+        err = errs[i]
+        expected_output = expected_outputs[i]
+        io = IOBuffer()
+        Base.showerror(io, err)
+        @test String(take!(io)) == expected_output
+    end
+end
+
+@testset "generate_kwmethods: \"Invalid keyword definition\" error" begin
+    expr = :(
+        for i= 1:10
+        end
+    )
+    @test_throws ErrorException KeywordDispatch.generate_kwmethods(expr, nothing, nothing, nothing)
 end
