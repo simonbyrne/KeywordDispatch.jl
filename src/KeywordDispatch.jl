@@ -16,14 +16,19 @@ function ntsort(nt::NamedTuple{N}) where {N}
     end
 end
 
-# given an argument, output a form appropriate for a method definition in pass-through methods
-# currently:
-#  - replaces underscores with new symbols
-#    g(_) => g(newsym)
-#  - replaces tuples with a single symbol
-#    g((a,b)) => g(newsym)
-#  - inserts symbols for 1-arg ::,
-#    g(::T)   => g(newsym::T)
+
+"""
+    argmeth(x)
+
+given an argument, output a form appropriate for a method definition in pass-through methods
+currently:
+ - replaces underscores with new symbols
+   g(_) => g(newsym)
+ - replaces tuples with a single symbol
+   g((a,b)) => g(newsym)
+ - inserts symbols for 1-arg ::,
+   g(::T)   => g(newsym::T)
+"""
 argmeth(x::Symbol) = x == :_ ? gensym() : x
 function argmeth(x::Expr)
     x.head == :tuple && return gensym()
@@ -32,24 +37,74 @@ function argmeth(x::Expr)
     return x
 end
 
-# given an argument, output a form appropriate for a method call in pass-through methods
-# currently:
-#  - removes the :: part
-#    g(x::T)   => g(x)
+
+"""
+    argsym(x)
+
+given an argument, output a form appropriate for a method call in pass-through methods
+currently:
+ - removes the :: part
+   g(x::T)   => g(x)
+"""
 argsym(x::Symbol) = x
 function argsym(x::Expr)
     x.head == :(::) && return length(x.args) > 1 ? x.args[1] : :_
     x.head == :...  && return Expr(:..., argsym.(x.args)...)
+    if x.head == :kw
+        if x.args[1] isa Expr && x.args[1].head == :(::) # Type also provided
+            return x.args[1].args[1]
+        else
+            return x.args[1]
+        end
+    end
     return x
 end
 
-# given an argument, output an argument type
-# currently:
-#  - g(x::T)  => T
-#  - g(x)     => Any
-argtype(x::Symbol) = Any
-argtype(x::Expr) = x.head == :(::) ? x.args[end] : error("unexpected expression $x")
 
+"""
+    argtype(x)
+
+given an argument, output an argument type
+- g(x::T)  => T
+- g(x::T = 2) => T
+- g(x) => Any
+- g(x=2) => Any
+"""
+argtype(x::Symbol) = Any
+function argtype(x::Expr)
+    if x.head == :(::) # Only Type provided
+        type = x.args[end]
+
+    elseif x.head == :kw # default value provided
+        if x.args[1] isa Expr && x.args[1].head == :(::) # Type also provided
+            type = x.args[1].args[end]
+        else
+            type = Any
+        end
+    else
+        error("unexpected expression $x")
+    end
+    return type
+end
+
+"""
+    arg_defval(x)
+
+Returns default value of a keyword if provided
+"""
+arg_defval(x::Symbol) = missing
+function arg_defval(x::Expr)
+    if x.head == :(::) # Only Type provided
+        defval = missing
+
+    elseif x.head == :kw # default value provided
+        defval = x.args[end]
+
+    else
+        error("unexpected expression $x")
+    end
+    return defval
+end
 
 function unwrap_where(expr)
     stack = Any[]
@@ -71,7 +126,8 @@ struct KeywordMethodError <: Exception
     f
     args
     kwargs
-    KeywordMethodError(@nospecialize(f), @nospecialize(args), @nospecialize(kwargs)) = new(f, args, kwargs)
+    kwargs_defval
+    KeywordMethodError(@nospecialize(f), @nospecialize(args), @nospecialize(kwargs), @nospecialize(kwargs_defval)) = new(f, args, kwargs, kwargs_defval)
 end
 
 function Base.showerror(io::IO, err::KeywordMethodError)
@@ -98,8 +154,8 @@ function Base.showerror(io::IO, err::KeywordMethodError)
     print(io, ")")
 end
 
-function kwcall(nt::NamedTuple, f, args...)
-    throw(KeywordMethodError(f, args, nt))
+function kwcall(nt::NamedTuple, nt_defval, f, args...)
+    throw(KeywordMethodError(f, args, nt, nt_defval))
 end
 
 
@@ -242,6 +298,16 @@ function kwmethod_expr(f, posargs, kwargs, wherestack, body)
 
     kwsyms = argsym.(kwargs)
     kwtypes = argtype.(kwargs)
+    kwdefval= arg_defval.(kwargs)
+
+    idx_nodefval = ismissing.(kwdefval)
+    kwsysm_nodefval = kwsyms[idx_nodefval]
+    kwtypes_nodefval = kwtypes[idx_nodefval]
+
+    idx_defval = .!idx_nodefval
+    kwsysm_defval = kwsyms[idx_defval]
+    kwtypes_defval = kwtypes[idx_defval]
+    kwdefval_defval = kwdefval[idx_defval]
 
     if f isa Expr && f.head == :(::)
         F = esc(f)
@@ -249,11 +315,13 @@ function kwmethod_expr(f, posargs, kwargs, wherestack, body)
         F = :(::($(esc(f)) isa Type ? Type{$(esc(f))} : typeof($(esc(f)))))
     end
 
+
     quote
-        $(wrap_where(:(KeywordDispatch.kwcall(($(esc.(kwsyms)...),)::NamedTuple{($(QuoteNode.(kwsyms)...),),T},
-                                              $F,
-                                              $(esc.(posargs)...)) where {T<:Tuple{$(esc.(kwtypes)...)}}), wherestack)) =
-                                                  $body
+        $(wrap_where(:(KeywordDispatch.kwcall( ($(esc.(kwsysm_nodefval)...),)::NamedTuple{($(QuoteNode.(kwsysm_nodefval)...),),T1},
+        ($(esc.(kwsysm_defval)...),)::NamedTuple{($(QuoteNode.(kwsysm_defval)...),),T2} = $(esc.(kwdefval_defval)...),
+        $F,
+        $(esc.(posargs)...)) where {T1<:Tuple{$(esc.(kwtypes_nodefval)...)}},
+        {T2<:Tuple{$(esc.(kwtypes_defval)...)}}), wherestack)) = $body
     end
 end
 
