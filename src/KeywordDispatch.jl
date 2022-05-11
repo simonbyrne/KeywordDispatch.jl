@@ -172,8 +172,8 @@ macro kwdispatch(fexpr,methods=nothing)
 
     quote
         $(wrap_where(:($(esc(f))($(esc.(posargs_method)...); kwargs...)), wherestack)) = begin
-            N = map(kw -> $rename_expr, propertynames(kwargs.data))
-            nt = NamedTuple{N}(Tuple(kwargs.data))
+            N = map(kw -> $rename_expr, keys(kwargs))
+            nt = NamedTuple{N}(Tuple(values(kwargs)))
             KeywordDispatch.kwcall(ntsort(nt), $ff, $(esc.(argsym.(posargs_method))...))
         end
         $(generate_kwmethods(methods, f, posargs, wherestack))
